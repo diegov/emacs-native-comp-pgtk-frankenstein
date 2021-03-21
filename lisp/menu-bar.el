@@ -604,7 +604,7 @@ Do the same for the keys of the same name."
   (define-key global-map [f20] 'clipboard-kill-region)
   (define-key global-map [f16] 'clipboard-kill-ring-save)
   (define-key global-map [f18] 'clipboard-yank)
-  ;; X11R6 versions:
+  ;; X11 versions:
   (define-key global-map [cut] 'clipboard-kill-region)
   (define-key global-map [copy] 'clipboard-kill-ring-save)
   (define-key global-map [paste] 'clipboard-yank))
@@ -2506,6 +2506,7 @@ See `menu-bar-mode' for more information."
 
 (declare-function x-menu-bar-open "term/x-win" (&optional frame))
 (declare-function w32-menu-bar-open "term/w32-win" (&optional frame))
+(declare-function pgtk-menu-bar-open "term/pgtk-win" (&optional frame))
 
 (defun lookup-key-ignore-too-long (map key)
   "Call `lookup-key' and convert numeric values to nil."
