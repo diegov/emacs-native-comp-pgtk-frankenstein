@@ -4088,9 +4088,11 @@ DEFUN ("comp-el-to-eln-filename", Fcomp_el_to_eln_filename,
        Scomp_el_to_eln_filename, 1, 2, 0,
        doc: /* Return the .eln filename for source FILENAME to used
 for new compilations.
-If BASE-DIR is nil use the first entry in `comp-eln-load-path'.  */)
+If BASE-DIR is non-nil use it as a base directory, look for a suitable
+directory in `comp-eln-load-path' otherwise.  */)
   (Lisp_Object filename, Lisp_Object base_dir)
 {
+  Lisp_Object source_filename = filename;
   filename = Fcomp_el_to_eln_rel_filename (filename);
 
   /* If base_dir was not specified search inside Vcomp_eln_load_path
@@ -4129,9 +4131,20 @@ If BASE-DIR is nil use the first entry in `comp-eln-load-path'.  */)
   if (!file_name_absolute_p (SSDATA (base_dir)))
     base_dir = Fexpand_file_name (base_dir, Vinvocation_directory);
 
-  return Fexpand_file_name (filename,
-			    Fexpand_file_name (Vcomp_native_version_dir,
-					       base_dir));
+  /* In case the file being compiled is found in 'LISP_PRELOADED' or
+     `comp-file-preloaded-p' is non-nil target for output the
+     'preloaded' subfolder.  */
+  Lisp_Object lisp_preloaded =
+    Fgetenv_internal (build_string ("LISP_PRELOADED"), Qnil);
+  base_dir = Fexpand_file_name (Vcomp_native_version_dir, base_dir);
+  if (comp_file_preloaded_p
+      || (!NILP (lisp_preloaded)
+	  && !NILP (Fmember (CALL1I (file-name-base, source_filename),
+			     Fmapcar (intern_c_string ("file-name-base"),
+				      CALL1I (split-string, lisp_preloaded))))))
+    base_dir = Fexpand_file_name (build_string ("preloaded"), base_dir);
+
+  return Fexpand_file_name (filename, base_dir);
 }
 
 DEFUN ("comp--install-trampoline", Fcomp__install_trampoline,
@@ -4739,7 +4752,7 @@ maybe_defer_native_compilation (Lisp_Object function_name,
 /* Fixup the system eln-cache dir.  This is the last entry in
    `comp-eln-load-path'.  */
 void
-fixup_eln_load_path (Lisp_Object directory)
+fixup_eln_load_path (Lisp_Object eln_filename)
 {
   Lisp_Object last_cell = Qnil;
   Lisp_Object tmp = Vcomp_eln_load_path;
@@ -4749,11 +4762,16 @@ fixup_eln_load_path (Lisp_Object directory)
 
   Lisp_Object eln_cache_sys =
     Ffile_name_directory (concat2 (Vinvocation_directory,
-				   directory));
-  /* One directory up...  */
-  eln_cache_sys =
-    Ffile_name_directory (Fsubstring (eln_cache_sys, Qnil,
-				      make_fixnum (-1)));
+				   eln_filename));
+  bool preloaded =
+    !NILP (Fequal (Fsubstring (eln_cache_sys, make_fixnum (-10),
+			       make_fixnum (-1)),
+		   build_string ("preloaded")));
+  /* One or two directories up...  */
+  for (int i = 0; i < (preloaded ? 2 : 1); i++)
+    eln_cache_sys =
+      Ffile_name_directory (Fsubstring (eln_cache_sys, Qnil,
+					make_fixnum (-1)));
   Fsetcar (last_cell, eln_cache_sys);
 }
 
@@ -5381,6 +5399,10 @@ be performed because the bytecode version was explicitly requested by
 the user during load.
 For internal use.  */);
   V_comp_no_native_file_h = CALLN (Fmake_hash_table, QCtest, Qequal);
+
+  DEFVAR_BOOL ("comp-file-preloaded-p", comp_file_preloaded_p,
+	       doc: /* When non-nil assume the file being compiled to
+be preloaded.  */);
 
   Fprovide (intern_c_string ("nativecomp"), Qnil);
 #endif /* #ifdef HAVE_NATIVE_COMP */
